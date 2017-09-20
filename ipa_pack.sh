@@ -1,19 +1,25 @@
 #! /bin/sh
 
-param=$1
-echo "开始执行shell脚本"
+#项目代码
+g_code_path=$1
+
+#svn 跟新路径
+g_svn_path=$2
 
 #项目代码根目录                                  
 g_main_proj_directory="/Users/shenjie/Documents/Myproject/9inHelper/9inHelper" 
 
 #要打包的target名称 支持逗号拼接
-g_target_name="ArtOfWuShu,ArtOfWuShu"   
+g_target_name="ArtOfWuShu"   
+
+#要打包的t工程名称
+g_proj_name="ArtOfWuShu"
 
 #资源要拷贝到的目录
 g_dest_res_path="${g_main_proj_directory}Resource/" 
 
 #打包所用资源的路径 支持逗号拼接
-g_res_path="/Users/shenjie/Documents/Myproject/9inHelper/9inHelper/9inHelper/Resource/sound,/Users/shenjie/Documents/Myproject/9inHelper/9inHelper/9inHelper/Resource/sound"
+g_res_path="/Users/shenjie/Documents/Myproject/9inHelper/9inHelper/9inHelper/Resource/sound"
 
 #打包所用资源的名称 nei／wai
 g_res_name="wai" 
@@ -29,6 +35,32 @@ exportOptionsPlistPath=${g_main_proj_directory}/9inHelper/exportOptions.plist
 
 #导出.ipa文件所在路径
 exportFilePath=${g_main_proj_directory}/products/ipa/${development_mode}/$(date +%y%m%d_%H%M)
+
+#svn 版本更新
+svn_version_update(){
+    echo 'svn 版本检查更新'
+    cd $g_code_path
+    svn up
+    if [ $? != 0 ]
+    then
+    echo -e "svn更新失败"   
+    exit 1
+    fi
+    echo "svncheck update success"
+}
+
+#svn 版本 checkout
+svn_version_checkout(){
+    cd $g_code_path
+    svn checkout $g_svn_path
+    if [ $? != 0 ]
+    then
+    echo -e "svn check失败"
+    exit 1
+    fi
+    echo "svncheck checkout success"
+}
+
 
 #清理工程
 clear_mainproj()
@@ -47,15 +79,13 @@ clear_mainproj()
 copy_resource()
 {
     src_res_path=$1
-    res_name=$2
-    show_name=$3
 
     echo "开始svn更新目录[$src_res_path]"
     cd $src_res_path
     svn up
     if [ $? != 0 ]
     then
-    echo -e "ERROR!!svn更新失败">$param/temp.txt
+    echo -e "ERROR!!svn更新失败"
     exit 1
     fi
     echo "svn更新完毕"
@@ -66,7 +96,7 @@ copy_resource()
     cp -R $src_res_path/* $g_dest_res_path
         if [ $? != 0 ]
         then
-            echo "[$(date +%y%m%d_%H:%M:%S)]<<资源拷贝>>[$g_target_name]渠道: 资源[$res_name] 拷贝异常请注意检查,资源路径[$src_res_path]">$param/temp.txt
+            echo "[$(date +%y%m%d_%H:%M:%S)]<<资源拷贝>>[$g_target_name]渠道: 资源拷贝异常请注意检查,资源路径[$src_res_path]"
             exit 1
         fi
 
@@ -92,70 +122,60 @@ build()
     IFS="$OLD_IFS"
     if [ $num_res_path != $num_target ]
     then
-        echo -e '打包参数个数不匹配'>$param/temp.txt
+        echo -e '打包参数个数不匹配'
         exit 1
     fi
 
     for ((i=0;i<num_target;i++))
     do
         target_name=${arr_target[$i]}
-        str_res_paths=${arr_res_path[$i]}
-        IFS=":"
-        arr_res_path_single_target=($str_res_paths)
-        IFS="$OLD_IFS"
-        num_res=${#arr_res_path_single_target[@]}
+        res_path=${arr_res_path[$i]}
 
-        for ((j=0;j<num_res;j++))
-        do
-            res_path=${arr_res_path_single_target[$j]}
-            echo "一共需要生成的包[$g_target_name] ,当前正在生成的包名称[$target_name], 资源名称[$g_res_name],资源路径[$res_path] "
-            # 资源拷贝
-            # copy_resource $res_path $res_name $target_name
+        # 资源拷贝
+        copy_resource $res_path
 
-            echo '1.正在 编译工程 For '${development_mode}
-            xcodebuild \
-            archive -workspace ${g_main_proj_directory}/${target_name}.xcworkspace \
-            -scheme ${target_name} \
-            -configuration ${development_mode} \
-            -archivePath ${g_build_path}/${target_name}.xcarchive 
-            # xcodebuild \
-            # archive -project ${g_main_proj_directory}/${target_name}.xcodeproj \
-            # -scheme ${target_name} \
-            # -configuration ${development_mode} \
-            # -archivePath ${g_build_path}/${target_name}.xcarchive 
+        echo '1.正在 编译工程 For '${development_mode}
+        xcodebuild \
+        archive -workspace ${g_main_proj_directory}/${g_proj_name}.xcworkspace \
+        -scheme ${target_name} \
+        -configuration ${development_mode} \
+        -archivePath ${g_build_path}/${target_name}.xcarchive 
+        # xcodebuild \
+        # archive -project ${g_main_proj_directory}/${target_name}.xcodeproj \
+        # -scheme ${target_name} \
+        # -configuration ${development_mode} \
+        # -archivePath ${g_build_path}/${target_name}.xcarchive 
 
-
-            if [ $? != 0 ]
-            then
-            echo "编译失败">$param/temp.txt
-            exit 1
-            fi
-            echo '*** 编译完成 ***'
+        if [ $? != 0 ]
+        then
+        echo "编译失败"
+        exit 1
+        fi
+        echo '*** 编译完成 ***'
 
 
-            echo "2. 开始打包ipa..."
+        echo "2. 开始打包ipa..."
 
-            channelipaname="${exportFilePath}/$(date +%Y%m%d%H%M%S)_${target_name}_${g_res_name}"
+        channelipaname="${exportFilePath}/$(date +%Y%m%d%H%M%S)_${target_name}_${g_res_name}"
 
-            xcodebuild \
-            -exportArchive -archivePath ${g_build_path}/${target_name}.xcarchive \
-            -configuration ${development_mode} \
-            -exportPath ${channelipaname} \
-            -exportOptionsPlist ${exportOptionsPlistPath} 
+        xcodebuild \
+        -exportArchive -archivePath ${g_build_path}/${g_proj_name}.xcarchive \
+        -configuration ${development_mode} \
+        -exportPath ${channelipaname} \
+        -exportOptionsPlist ${exportOptionsPlistPath} 
 
-            if [ $? != 0 ]
-            then
-            echo "创建.ipa文件失败">$param/temp.txt
-            exit 1
-            fi
-               
-             echo '*** .ipa文件已导出 ***'
-        done
+        if [ $? != 0 ]
+        then
+        echo "创建.ipa文件失败"
+        exit 1
+        fi
+         echo '*** .ipa文件已导出 ***'
     done   
 
     exit 0
 }
 
+svn_version_update
 clear_mainproj
 build 
 
